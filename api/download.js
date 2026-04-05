@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
   try {
     const yt = await Innertube.create({ retrieve_player: true });
-    const info = await yt.getBasicInfo(videoId, { client: "ANDROID" });
+    const info = await yt.getBasicInfo(videoId);
 
     const title = info.basic_info?.title || "video";
     const thumbnail =
