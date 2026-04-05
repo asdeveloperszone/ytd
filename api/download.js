@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
   try {
     const yt = await Innertube.create({ retrieve_player: true });
-    const info = await yt.getBasicInfo(videoId);
+    const info = await yt.getInfo(videoId);
 
     const title = info.basic_info?.title || "video";
     const thumbnail =
@@ -34,27 +34,45 @@ export default async function handler(req, res) {
     const duration = info.basic_info?.duration || 0;
     const author = info.basic_info?.author || "Unknown";
 
-    // Find best 360p format (video+audio combined)
-    const formats = info.streaming_data?.formats || [];
-    const adaptiveFormats = info.streaming_data?.adaptive_formats || [];
-    const allFormats = [...formats, ...adaptiveFormats];
+    // Use choose_format to get a deciphered format
+    let chosen;
+    try {
+      chosen = info.chooseFormat({ quality: "360p", type: "video+audio" });
+    } catch (_) {
+      try {
+        chosen = info.chooseFormat({ quality: "best", type: "video+audio" });
+      } catch (_) {
+        chosen = null;
+      }
+    }
 
-    // Priority: 360p mp4 with audio (combined), else closest
-    let chosen =
-      allFormats.find(
-        (f) =>
-          f.quality_label === "360p" &&
-          f.mime_type?.includes("video/mp4") &&
-          f.has_audio
-      ) ||
-      allFormats.find(
-        (f) => f.quality_label === "360p" && f.mime_type?.includes("video/mp4")
-      ) ||
-      allFormats.find((f) => f.quality_label === "360p") ||
-      formats[0]; // fallback to first combined format
+    // Fallback: scan streaming_data manually
+    if (!chosen) {
+      const formats = [
+        ...(info.streaming_data?.formats || []),
+        ...(info.streaming_data?.adaptive_formats || []),
+      ];
+      chosen =
+        formats.find((f) => f.quality_label === "360p" && f.mime_type?.includes("video/mp4")) ||
+        formats.find((f) => f.quality_label === "360p") ||
+        formats.find((f) => f.mime_type?.includes("video/mp4")) ||
+        formats[0];
+    }
 
-    if (!chosen || !chosen.url) {
-      return res.status(404).json({ error: "No downloadable format found. Video may be restricted." });
+    if (!chosen) {
+      return res.status(404).json({ error: "No format found for this video." });
+    }
+
+    // Decipher the URL
+    let downloadUrl;
+    try {
+      downloadUrl = await info.getStreamingData(chosen);
+    } catch (_) {
+      downloadUrl = chosen.decipher?.(yt.session.player) || chosen.url;
+    }
+
+    if (!downloadUrl) {
+      return res.status(404).json({ error: "Could not get download URL. Video may be restricted." });
     }
 
     return res.status(200).json({
@@ -63,12 +81,12 @@ export default async function handler(req, res) {
       thumbnail,
       duration,
       videoId,
-      downloadUrl: chosen.url,
+      downloadUrl,
       quality: chosen.quality_label || "360p",
       mimeType: chosen.mime_type || "video/mp4",
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Failed to fetch video info: " + err.message });
+    return res.status(500).json({ error: "Failed: " + err.message });
   }
 }
