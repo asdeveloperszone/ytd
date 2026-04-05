@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YTGET — YouTube Downloader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --border: #222222;
+      --accent: #e8ff47;
+      --accent2: #ff4747;
+      --text: #f0f0f0;
+      --muted: #555555;
+      --card: #141414;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 16px 60px;
+      overflow-x: hidden;
+    }
+
+    /* Noise overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    /* Header */
+    header {
+      width: 100%;
+      max-width: 720px;
+      padding: 48px 0 32px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .logo {
+      font-size: clamp(2.4rem, 8vw, 4rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .logo span {
+      color: var(--accent);
+    }
+
+    .tagline {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    /* Divider */
+    .divider {
+      width: 100%;
+      max-width: 720px;
+      height: 1px;
+      background: var(--border);
+      margin-bottom: 36px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Input area */
+    .input-wrap {
+      width: 100%;
+      max-width: 720px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .url-row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .url-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.82rem;
+      padding: 14px 18px;
+      outline: none;
+      transition: border-color 0.2s;
+      min-width: 0;
+    }
+
+    .url-input::placeholder { color: var(--muted); }
+
+    .url-input:focus {
+      border-color: var(--accent);
+    }
+
+    .fetch-btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.82rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 14px 24px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .fetch-btn:hover { background: #d4eb30; }
+    .fetch-btn:active { transform: scale(0.97); }
+    .fetch-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+    /* Status */
+    .status {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      margin-top: 12px;
+      min-height: 18px;
+      letter-spacing: 0.05em;
+    }
+    .status.loading { color: var(--accent); }
+    .status.error   { color: var(--accent2); }
+    .status.ok      { color: #6bffb0; }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border: 2px solid var(--accent);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Result card */
+    .result-card {
+      width: 100%;
+      max-width: 720px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      margin-top: 28px;
+      position: relative;
+      z-index: 1;
+      animation: slideUp 0.3s ease;
+      display: none;
+    }
+
+    .result-card.visible { display: block; }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-inner {
+      display: flex;
+      gap: 0;
+    }
+
+    .thumb-wrap {
+      width: 160px;
+      min-height: 100px;
+      flex-shrink: 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .quality-badge {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      background: var(--accent);
+      color: #000;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      letter-spacing: 0.08em;
+    }
+
+    .video-meta {
+      flex: 1;
+      padding: 18px 20px;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .video-title {
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.3;
+      letter-spacing: -0.01em;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .video-author {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      margin-top: 4px;
+    }
+
+    .video-duration {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.78rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 10px 20px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+      align-self: flex-start;
+    }
+
+    .download-btn:hover {
+      background: var(--accent);
+      color: #000;
+    }
+
+    .download-btn svg {
+      width: 14px; height: 14px;
+      flex-shrink: 0;
+    }
+
+    /* Note box */
+    .note {
+      width: 100%;
+      max-width: 720px;
+      border-left: 2px solid var(--muted);
+      padding: 10px 16px;
+      margin-top: 28px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.67rem;
+      color: var(--muted);
+      line-height: 1.7;
+      letter-spacing: 0.02em;
+      position: relative;
+      z-index: 1;
+    }
+
+    .note strong { color: #888; }
+
+    /* Responsive */
+    @media (max-width: 500px) {
+      .card-inner { flex-direction: column; }
+      .thumb-wrap { width: 100%; height: 180px; }
+      .url-row { flex-direction: column; }
+      .fetch-btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">YT<span>GET</span></div>
+    <div class="tagline">// YouTube 360p Downloader — No BS, No Ads</div>
+  </header>
+
+  <div class="divider"></div>
+
+  <div class="input-wrap">
+    <div class="url-row">
+      <input
+        class="url-input"
+        id="urlInput"
+        type="text"
+        placeholder="https://www.youtube.com/watch?v=..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="fetch-btn" id="fetchBtn" onclick="fetchVideo()">GET</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="result-card" id="resultCard">
+    <div class="card-inner">
+      <div class="thumb-wrap">
+        <img id="thumbnail" src="" alt="thumbnail" />
+        <div class="quality-badge" id="qualityBadge">360p</div>
+      </div>
+      <div class="video-meta">
+        <div>
+          <div class="video-title" id="videoTitle">—</div>
+          <div class="video-author" id="videoAuthor"></div>
+          <div class="video-duration" id="videoDuration"></div>
+        </div>
+        <a class="download-btn" id="downloadBtn" href="#" download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Download 360p
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>NOTE:</strong> Download links expire after ~6 hours (YouTube limitation).<br />
+    Works with public videos only. No login required.<br />
+    Backend hosted on Vercel — configure <strong>API_BASE</strong> below to your deployment URL.
+  </div>
+
+  <script>
+    // ─── CONFIG ───────────────────────────────────────────────
+    // After deploying to Vercel, replace this with your actual URL:
+    // e.g. "https://your-project.vercel.app"
+    const API_BASE = "https://YOUR-PROJECT.vercel.app";
+    // ─────────────────────────────────────────────────────────
+
+    const urlInput  = document.getElementById("urlInput");
+    const fetchBtn  = document.getElementById("fetchBtn");
+    const statusEl  = document.getElementById("status");
+    const resultCard= document.getElementById("resultCard");
+
+    urlInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") fetchVideo();
+    });
+
+    function formatDuration(secs) {
+      if (!secs) return "";
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = secs % 60;
+      return h
+        ? `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`
+        : `${m}:${String(s).padStart(2,"0")}`;
+    }
+
+    function setStatus(msg, type) {
+      statusEl.className = "status " + type;
+      statusEl.innerHTML = msg;
+    }
+
+    async function fetchVideo() {
+      const url = urlInput.value.trim();
+      if (!url) {
+        setStatus("⚠ Paste a YouTube URL first.", "error");
+        return;
+      }
+
+      fetchBtn.disabled = true;
+      resultCard.classList.remove("visible");
+      setStatus('<span class="spinner"></span>Fetching video info...', "loading");
+
+      try {
+        const res = await fetch(`${API_BASE}/api/download?url=${encodeURIComponent(url)}`);
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Server error");
+
+        document.getElementById("videoTitle").textContent    = data.title;
+        document.getElementById("videoAuthor").textContent   = "by " + data.author;
+        document.getElementById("videoDuration").textContent = formatDuration(data.duration);
+        document.getElementById("thumbnail").src             = data.thumbnail;
+        document.getElementById("qualityBadge").textContent  = data.quality || "360p";
+
+        const dlBtn = document.getElementById("downloadBtn");
+        dlBtn.href     = data.downloadUrl;
+        dlBtn.download = data.title.replace(/[^a-z0-9]/gi, "_") + ".mp4";
+
+        resultCard.classList.add("visible");
+        setStatus("✓ Done. Link valid for ~6 hours.", "ok");
+      } catch (err) {
+        setStatus("✗ " + err.message, "error");
+      } finally {
+        fetchBtn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

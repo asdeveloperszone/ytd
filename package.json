@@ -1,0 +1,12 @@
+{
+  "name": "yt-downloader-proxy",
+  "version": "1.0.0",
+  "description": "YouTube 360p downloader proxy for Vercel",
+  "type": "module",
+  "dependencies": {
+    "youtubei.js": "^10.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
